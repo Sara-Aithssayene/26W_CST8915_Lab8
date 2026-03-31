@@ -1,36 +1,35 @@
-# Algonquin Pet Store (On Steroids)
-Welcome to the Algonquin Pet Store (On Steroids) application.
+# CST8915 Lab8
 
-This sample demo app consists of a group of containerized microservices that can be easily deployed into a Kubernetes cluster. This is meant to show a realistic scenario using a polyglot architecture, event-driven design, and common open source back-end services (eg - RabbitMQ, MongoDB). The application also leverages OpenAI's models to generate product descriptions and images. This can be done using either [Azure OpenAI](https://learn.microsoft.com/azure/ai-services/openai/overview) or [OpenAI](https://openai.com/).
+## Video Demo
+Youtube Video link: https://www.youtube.com/watch?v=o9zhl8-7psk
 
-This application is inspired by Azure Kubernetes Service (AKS) quickstart demo [Azure Kubernetes Service (AKS) Docs](https://learn.microsoft.com/en-us/azure/aks/).
+## Task 2: Improving and Extending the Deployment
 
-> [!NOTE]
-> This is not meant to be an example of perfect code to be used in production, but more about showing a realistic application running in kubernetes. 
+In Task 2, I improved the deployment by making MongoDB and RabbitMQ persistent and more reliable. In the original setup, both services were running inside the cluster without persistent storage, so their data would be lost if the pods were deleted or restarted.
 
-## Architecture
+### MongoDB persistence and high availability
 
-The application has the following services: 
+To improve MongoDB, I changed it to run as a StatefulSet with 3 replicas. This allows MongoDB to work as a replica set, where one node is the primary and the others are secondary replicas. This improves availability because if one node fails, the others can continue serving requests.
+I also made the MongoDB service headless (clusterIP: None) so that each pod has a stable DNS name (like mongodb-0.mongodb).
+To make the data persistent, I added a PersistentVolumeClaim (PVC) using volumeClaimTemplates. Each MongoDB pod stores its data in /data/db, so the data is kept even if the pod is deleted.
 
-| Service | Description | Github Repo | Docker Image |
-| --- | --- | --- | --- |
-| `store-front` | Web app for customers to place orders (Vue.js) | [store-front-L8](https://github.com/ramymohamed10/store-front-L8) | [ramymohamed/store-front-l8](https://hub.docker.com/r/ramymohamed/store-front-l8) |
-| `store-admin` | Web app used by store employees to view orders in queue and manage products (Vue.js) | [store-admin-L8](https://github.com/ramymohamed10/store-admin-L8) | [ramymohamed/store-admin-l8](https://hub.docker.com/r/ramymohamed/store-admin-l8) |
-| `order-service` | This service is used for placing orders (Javascript) | [order-service-L8](https://github.com/ramymohamed10/order-service-L8) | [ramymohamed/order-service-l8](https://hub.docker.com/r/ramymohamed/order-service-l8) |
-| `product-service` | This service is used to perform CRUD operations on products (Rust) | [product-service-L8](https://github.com/ramymohamed10/product-service-L8) | [ramymohamed/product-service-l8](https://hub.docker.com/r/ramymohamed/product-service-l8) |
-| `makeline-service` | This service handles processing orders from the queue and completing them (Golang) | [makeline-service-L8](https://github.com/ramymohamed10/makeline-service-L8) | [ramymohamed/makeline-service-l8](https://hub.docker.com/r/ramymohamed/makeline-service-l8) |
-| `ai-service` | Optional service for adding generative text and graphics creation (Python) | [ai-service-L8](https://github.com/ramymohamed10/ai-service-L8) | [ramymohamed/ai-service-l8](https://hub.docker.com/r/ramymohamed/ai-service-l8) |
-| `rabbitmq` | RabbitMQ for an order queue | [rabbitmq](https://github.com/docker-library/rabbitmq) | [rabbitmq:3-management](https://hub.docker.com/_/rabbitmq) |
-| `mongodb` | MongoDB instance for persisted data | [mongodb](https://github.com/docker-library/mongo) | [mongo:4.2](https://hub.docker.com/_/mongo) |
-| `virtual-customer` | Simulates order creation on a scheduled basis (Rust) | [virtual-customer-L8](https://github.com/ramymohamed10/virtual-customer-L8) | [ramymohamed/virtual-customer-l8](https://hub.docker.com/r/ramymohamed/virtual-customer-l8) |
-| `virtual-worker` | Simulates order completion on a scheduled basis (Rust) | [virtual-worker-L8](https://github.com/ramymohamed10/virtual-worker-L8) | [ramymohamed/virtual-worker-l8](https://hub.docker.com/r/ramymohamed/virtual-worker-l8) |
+### RabbitMQ persistence
 
+For RabbitMQ, I added a PersistentVolumeClaim and mounted it at: /var/lib/rabbitmq
+This is where RabbitMQ stores its queue data. With this change, messages are not lost when the pod restarts. I also kept the ConfigMap for plugins so that RabbitMQ configuration still works.
 
-![Logical Application Architecture Diagram](assets/Algonquin%20Pet%20Store%20On%20Steroids.png)
+### Proving MongoDB persistence
 
-## Run the app on Azure Kubernetes Service (AKS)
+To test MongoDB, I created and processed orders so they would be stored in the database. Then I deleted one MongoDB pod. After it restarted, I connected to another MongoDB pod and checked the data again. The orders were still there. This proves that data is persistent and other nodes of the replica set.
 
-You can use the kubernetes YAML files provided in the [Deployment Files](./Deployment%20Files/) folder to deploy the app to an AKS cluster.
+### Proving RabbitMQ persistence
 
+To test RabbitMQ, I created a couple of orders and then deleted the RabbitMQ pod. After the pod restarted, the application still worked and the order workflow was not lost. This shows that RabbitMQ data is also persistent.
 
+### Azure managed services
+
+In a real production environment, these services could be replaced with Azure managed services:
+
+- Azure Cosmos DB for MongoDB: a managed database service with built-in scaling, replication, and backups.
+- Azure Service Bus: a managed messaging service that replaces RabbitMQ and handles queues reliably.
 
