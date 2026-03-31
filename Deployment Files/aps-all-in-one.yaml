@@ -5,7 +5,7 @@ metadata:
   name: mongodb
 spec:
   serviceName: mongodb # Associated headless service for DNS resolution
-  replicas: 1 # Number of MongoDB replicas
+  replicas: 3 # Number of MongoDB replicas
   selector:
     matchLabels:
       app: mongodb # Labels to match for this StatefulSet
@@ -19,9 +19,17 @@ spec:
       containers:
         - name: mongodb
           image: mongo:4.2 # MongoDB container image version
+          command:
+            - mongod
+            - "--bind_ip_all"
+            - "--replSet"
+            - "rs0"
           ports:
             - containerPort: 27017 # Default MongoDB port
               name: mongodb
+          volumeMounts:
+            - name: mongodb-data
+              mountPath: /data/db
           resources: # Resource requests and limits for MongoDB
             requests:
               cpu: 5m # Minimum CPU
@@ -37,6 +45,14 @@ spec:
                 - db.runCommand('ping').ok
             initialDelaySeconds: 5 # Wait time before starting probe
             periodSeconds: 5 # Interval between probes
+  volumeClaimTemplates:
+    - metadata:
+        name: mongodb-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
 ---
 # Service to expose MongoDB
 apiVersion: v1
@@ -44,11 +60,12 @@ kind: Service
 metadata:
   name: mongodb
 spec:
-  ports:
-    - port: 27017 # MongoDB service port
+  clusterIP: None
   selector:
-    app: mongodb # Target pods with label `app: mongodb`
-  type: ClusterIP # Internal cluster service
+    app: mongodb
+  ports:
+    - port: 27017
+      targetPort: 27017
 ---
 # StatefulSet for RabbitMQ
 apiVersion: apps/v1
@@ -92,6 +109,8 @@ spec:
             - name: rabbitmq-enabled-plugins
               mountPath: /etc/rabbitmq/enabled_plugins
               subPath: enabled_plugins
+            - name: rabbitmq-data
+              mountPath: /var/lib/rabbitmq
       volumes:
         - name: rabbitmq-enabled-plugins
           configMap:
@@ -99,6 +118,14 @@ spec:
             items:
               - key: rabbitmq_enabled_plugins
                 path: enabled_plugins
+  volumeClaimTemplates:
+    - metadata:
+        name: rabbitmq-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
 ---
 # Service for RabbitMQ
 apiVersion: v1
@@ -136,7 +163,7 @@ spec:
         "kubernetes.io/os": linux
       containers:
         - name: order-service
-          image: ramymohamed/order-service-l8:latest # Custom image for order service
+          image: sarait2102/order-service:latest # Custom image for order service
           ports:
             - containerPort: 3000 # Order service listens on this port
           env: # Environment variables for configuration
@@ -230,7 +257,7 @@ spec:
         "kubernetes.io/os": linux
       containers:
         - name: makeline-service
-          image: ramymohamed/makeline-service-l8:latest # Custom Makeline service image
+          image: sarait2102/makeline-service:latest # Custom Makeline service image
           ports:
             - containerPort: 3001 # Makeline service listens on this port
           env: # Environment variables for configuration
@@ -243,7 +270,7 @@ spec:
             - name: ORDER_QUEUE_NAME
               value: "orders"
             - name: ORDER_DB_URI
-              value: "mongodb://mongodb:27017" # MongoDB connection string
+              value: "mongodb://mongodb-0.mongodb:27017,mongodb-1.mongodb:27017,mongodb-2.mongodb:27017/?replicaSet=rs0" # MongoDB connection string
             - name: ORDER_DB_NAME
               value: "orderdb" # Database name
             - name: ORDER_DB_COLLECTION_NAME
@@ -309,7 +336,7 @@ spec:
         "kubernetes.io/os": linux
       containers:
         - name: product-service
-          image: ramymohamed/product-service-l8:latest # Custom product service image
+          image: sarait2102/product-service:latest # Custom product service image
           ports:
             - containerPort: 3002 # Product service listens on this port
           env: # Environment variables for configuration
@@ -370,7 +397,7 @@ spec:
         "kubernetes.io/os": linux
       containers:
         - name: store-front
-          image: ramymohamed/store-front-l8:latest # Front-end store application
+          image: sarait2102/store-front:latest # Front-end store application
           ports:
             - containerPort: 8080 # Front-end app port
               name: store-front
@@ -440,7 +467,7 @@ spec:
         "kubernetes.io/os": linux
       containers:
         - name: store-admin
-          image: ramymohamed/store-admin-l8:latest # Admin interface for store
+          image: sarait2102/store-admin:latest # Admin interface for store
           ports:
             - containerPort: 8081 # Admin app port
               name: store-admin
@@ -510,7 +537,7 @@ spec:
         "kubernetes.io/os": linux
       containers:
         - name: ai-service
-          image: ramymohamed/ai-service-l8:latest
+          image: sarait2102/ai-service:latest
           ports:
             - containerPort: 5001
           env:
