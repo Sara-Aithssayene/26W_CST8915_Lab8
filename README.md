@@ -16,7 +16,7 @@ To make the data persistent, I added a PersistentVolumeClaim (PVC) using volumeC
 ### RabbitMQ persistence
 
 For RabbitMQ, I added a PersistentVolumeClaim and mounted it at: /var/lib/rabbitmq
-This is where RabbitMQ stores its queue data. With this change, messages are not lost when the pod restarts. I also kept the ConfigMap for plugins so that RabbitMQ configuration still works.
+This is where RabbitMQ stores its queue data. With this change, messages are not lost when the pod restarts. I also kept the ConfigMap for plugins so that RabbitMQ configuration still works. ((I also updated the order-service to send persistent messages by setting durable: true).
 
 ### Proving MongoDB persistence
 
